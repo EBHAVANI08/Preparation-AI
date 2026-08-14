@@ -1,12 +1,20 @@
 import { z } from 'zod';
 
-const safeString = (defaultVal?: string) =>
+const optionalString = () =>
+  z.preprocess((val) => {
+    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+      return undefined;
+    }
+    return val;
+  }, z.string().min(1).optional());
+
+const requiredString = (defaultVal: string) =>
   z.preprocess((val) => {
     if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
       return defaultVal;
     }
     return val;
-  }, defaultVal !== undefined ? z.string().min(1) : z.string().min(1).optional());
+  }, z.string().min(1));
 
 const safeUrl = (defaultVal: string) =>
   z.preprocess((val) => {
@@ -28,16 +36,16 @@ const schema = z.object({
     (val) => (val === 'production' || val === 'test' ? val : 'development'),
     z.enum(['development', 'test', 'production'])
   ),
-  MONGODB_URI: safeString(),
-  MONGODB_DB: safeString('preparation_ai'),
-  AUTH_SECRET: safeString(),
-  AI_PROVIDER_ORDER: safeString('groq,zai'),
+  MONGODB_URI: optionalString(),
+  MONGODB_DB: requiredString('preparation_ai'),
+  AUTH_SECRET: optionalString(),
+  AI_PROVIDER_ORDER: requiredString('groq,zai'),
   AI_TIMEOUT_MS: safeNumber(25000),
-  GROQ_API_KEY: safeString(),
-  GROQ_MODEL: safeString('llama-3.3-70b-versatile'),
-  ZAI_API_KEY: safeString(),
+  GROQ_API_KEY: optionalString(),
+  GROQ_MODEL: requiredString('llama-3.3-70b-versatile'),
+  ZAI_API_KEY: optionalString(),
   ZAI_BASE_URL: safeUrl('https://api.z.ai/api/paas/v4'),
-  ZAI_MODEL: safeString('glm-4.5-flash'),
+  ZAI_MODEL: requiredString('glm-4.5-flash'),
 });
 
 export const env = schema.parse(process.env);
@@ -47,5 +55,6 @@ export function assertProductionEnvironment(): void {
   if (!env.MONGODB_URI) throw new Error('MONGODB_URI is required in production');
   if (!env.AUTH_SECRET) throw new Error('AUTH_SECRET is required in production');
 }
+
 
 
