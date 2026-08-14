@@ -27,16 +27,17 @@ async function openAICompatible(
 const providers: Record<string, Provider> = {
   groq: {
     name: 'groq', configured: () => Boolean(env.GROQ_API_KEY),
-    complete: (messages, signal) => openAICompatible('groq', 'https://api.groq.com/openai/v1', env.GROQ_API_KEY ?? '', env.GROQ_MODEL, messages, signal),
+    complete: (messages, signal) => openAICompatible('groq', 'https://api.groq.com/openai/v1', env.GROQ_API_KEY ?? '', env.GROQ_MODEL ?? 'llama-3.3-70b-versatile', messages, signal),
   },
   zai: {
     name: 'zai', configured: () => Boolean(env.ZAI_API_KEY),
-    complete: (messages, signal) => openAICompatible('zai', env.ZAI_BASE_URL, env.ZAI_API_KEY ?? '', env.ZAI_MODEL, messages, signal),
+    complete: (messages, signal) => openAICompatible('zai', env.ZAI_BASE_URL ?? 'https://api.z.ai/api/paas/v4', env.ZAI_API_KEY ?? '', env.ZAI_MODEL ?? 'glm-4.5-flash', messages, signal),
   },
 };
 
 export async function completeAI(task: AITask, messages: AIMessage[]) {
-  const requested = env.AI_PROVIDER_ORDER.split(',').map((value) => value.trim().toLowerCase());
+  const requested = (env.AI_PROVIDER_ORDER || 'groq,zai').split(',').map((value) => value.trim().toLowerCase());
+
   const order = task === 'analysis' ? [...requested].sort((a) => a === 'zai' ? -1 : 1) : requested;
   const failures: string[] = [];
   const startedAt = Date.now();
