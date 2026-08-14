@@ -1,7 +1,6 @@
 'use client';
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { User, View, ExamAttempt, GeneratedExam, ChatMessage } from '@/lib/types';
 
 function uid(): string {
@@ -109,6 +108,7 @@ interface StoreState {
   startExam: (exam: GeneratedExam, examId: string) => void;
   endExam: () => void;
   addAttempt: (a: ExamAttempt) => void;
+  setAttempts: (attempts: ExamAttempt[]) => void;
   addMentorMessage: (m: ChatMessage) => void;
   setMentorMessages: (m: ChatMessage[]) => void;
   dismissDailyPlan: (date: string) => void;
@@ -119,7 +119,6 @@ interface StoreState {
 }
 
 export const useStore = create<StoreState>()(
-  persist(
     (set) => ({
       user: null,
       view: 'auth',
@@ -128,16 +127,17 @@ export const useStore = create<StoreState>()(
       attempts: [],
       mentorMessages: [],
       dailyPlanDismissed: null,
-      hydrated: false,
+      hydrated: true,
       seenSignatures: [],
 
       setHydrated: (v) => set({ hydrated: v }),
-      login: (user) => set({ user, view: 'dashboard', attempts: seedAttempts() }),
+      login: (user) => set({ user, view: 'dashboard', attempts: [] }),
       logout: () => set({ user: null, view: 'auth', currentExam: null, currentExamId: null, attempts: [], mentorMessages: [], seenSignatures: [] }),
       setView: (v) => set({ view: v }),
       startExam: (exam, examId) => set({ currentExam: exam, currentExamId: examId, view: 'mock-exam' }),
       endExam: () => set({ currentExam: null, currentExamId: null }),
       addAttempt: (a) => set((s) => ({ attempts: [a, ...s.attempts] })),
+      setAttempts: (attempts) => set({ attempts }),
       addMentorMessage: (m) => set((s) => ({ mentorMessages: [...s.mentorMessages, m] })),
       setMentorMessages: (m) => set({ mentorMessages: m }),
       dismissDailyPlan: (date) => set({ dailyPlanDismissed: date }),
@@ -163,17 +163,7 @@ export const useStore = create<StoreState>()(
         const arr = Array.from(existing).slice(-5000);
         return { seenSignatures: arr };
       }),
-    }),
-    {
-      name: 'prep-ai-store',
-      onRehydrateStorage: () => (state) => {
-        if (state?.user && (!state.user.examGoals || state.user.examGoals.length === 0)) {
-          state.user.examGoals = [state.user.examGoal];
-        }
-        state?.setHydrated(true);
-      },
-    }
-  )
+    })
 );
 
 export function defaultExamDate(): string {

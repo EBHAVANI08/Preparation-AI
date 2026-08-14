@@ -98,6 +98,9 @@ export interface GeneratedExam {
   startedAt: string;
   questions: Question[];
   sections: { name: string; subject: string; questionIds: string[] }[];
+  draftAnswers?: Record<string, AnswerValue>;
+  draftTimeTaken?: Record<string, number>;
+  currentQuestion?: number;
 }
 
 export type AnswerValue =

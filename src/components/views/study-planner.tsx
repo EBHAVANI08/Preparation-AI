@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CalendarDays,
   RotateCcw,
@@ -63,6 +63,10 @@ export function StudyPlanner() {
 
   const [activeTab, setActiveTab] = useState<StudyPlan['type']>('daily');
   const [doneBlocks, setDoneBlocks] = useState<Set<string>>(new Set());
+  const [planLoaded, setPlanLoaded] = useState(false);
+
+  useEffect(() => { fetch('/api/study-plan').then((r) => r.ok ? r.json() : null).then((b) => { if (b) setDoneBlocks(new Set(b.completedBlockIds)); setPlanLoaded(true); }).catch(() => setPlanLoaded(true)); }, []);
+  useEffect(() => { if (!planLoaded) return; const timer = setTimeout(() => { fetch('/api/study-plan', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ completedBlockIds: [...doneBlocks] }) }).catch(() => undefined); }, 500); return () => clearTimeout(timer); }, [doneBlocks, planLoaded]);
 
   const pattern = user ? getPattern(user.examGoal) : undefined;
   const examName = pattern?.name || user?.examGoal || 'JEE Main';

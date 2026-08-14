@@ -1,0 +1,3 @@
+import type { View } from './types';
+export const VIEW_PATHS: Partial<Record<View, string>> = { dashboard: '/dashboard', 'mock-exam': '/exams', analytics: '/analytics', mentor: '/mentor', planner: '/planner', career: '/career', university: '/universities', scholarship: '/scholarships', counsellor: '/wellness', 'university-predictor': '/university-predictor', 'digital-twin': '/digital-twin', readiness: '/readiness', 'rank-predictor': '/rank-predictor', 'success-simulator': '/success-simulator', 'weakness-radar': '/analytics' };
+export function viewForPath(pathname: string): View { const entry = Object.entries(VIEW_PATHS).find(([, path]) => path === pathname); return (entry?.[0] as View) || 'dashboard'; }

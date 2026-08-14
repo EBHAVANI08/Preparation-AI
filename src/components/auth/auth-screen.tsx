@@ -131,7 +131,7 @@ export function AuthScreen() {
     setSelectedExams((curr) => (curr.includes(id) ? curr.filter((x) => x !== id) : [...curr, id]));
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (tab === 'signup' && !name.trim()) {
       toast({ title: 'Please enter your name', variant: 'destructive' });
@@ -141,12 +141,30 @@ export function AuthScreen() {
       toast({ title: 'Please enter a valid email', variant: 'destructive' });
       return;
     }
-    if (password.length < 4) {
-      toast({ title: 'Password must be at least 4 characters', variant: 'destructive' });
+    if (password.length < 8) {
+      toast({ title: 'Password must be at least 8 characters', variant: 'destructive' });
       return;
     }
     if (selectedExams.length === 0) {
       toast({ title: 'Select at least one target exam', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/auth/${tab === 'signup' ? 'register' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tab === 'signup'
+          ? { name: name.trim(), email: email.trim(), password, type: userType, examGoals: selectedExams }
+          : { email: email.trim(), password }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Authentication failed');
+      login(payload.user as User);
+      toast({ title: `Welcome, ${payload.user.name.split(' ')[0]}!`, description: 'Your secure account is ready.' });
+      return;
+    } catch (error) {
+      toast({ title: 'Could not sign in', description: (error as Error).message, variant: 'destructive' });
       return;
     }
 
@@ -160,7 +178,7 @@ export function AuthScreen() {
       examGoal: primaryExam,
       examGoals: [...selectedExams],
       examDate: defaultExamDate(),
-      targetScore: pattern ? Math.round(pattern.totalMarks * 0.75) : undefined,
+      targetScore: pattern ? Math.round((pattern?.totalMarks ?? 0) * 0.75) : undefined,
       joinedAt: new Date().toISOString(),
     };
 

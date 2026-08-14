@@ -4,22 +4,44 @@ import type {
   GeneratedExam, BehaviorAnalysis,
 } from '@/lib/types';
 import { getVideosForTopic, searchUrlForTopic, thumbnailUrl, type YoutubeVideo } from '@/lib/youtube-data';
+import { randomUUID } from 'crypto';
+import { z } from 'zod';
+import { database } from '@/lib/server/mongodb';
+import { requireSession } from '@/lib/server/session';
+import { apiError } from '@/lib/server/api';
+import { scoreQuestion } from '@/modules/evaluation/score-question';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 function uid(): string {
-  return Math.random().toString(36).slice(2, 11);
+  return randomUUID();
 }
+
+const submissionSchema = z.object({
+  exam: z.object({ id: z.string().uuid() }).passthrough(),
+  answers: z.record(z.string(), z.unknown()).default({}),
+  timeTaken: z.record(z.string(), z.number().finite().min(0).max(86400)).default({}),
+});
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const exam: GeneratedExam = body.exam;
-    const answers: Record<string, AnswerValue> = body.answers || {};
-    const timeTaken: Record<string, number> = body.timeTaken || {};
-    const attemptNumber: number = body.attemptNumber || 1;
-    const previousAttempt: ExamAttempt | null = body.previousAttempt || null;
+    const identity = await requireSession();
+    const body = submissionSchema.parse(await request.json());
+    const db = await database();
+    const stored = await db.collection('attempts').findOne({ id: body.exam.id, userId: identity.userId, organizationId: identity.organizationId });
+    if (!stored) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
+    if (stored.status === 'submitted' && stored.result) return NextResponse.json({ attempt: stored.result });
+    const exam = stored.exam as GeneratedExam;
+    const deadline = new Date(exam.startedAt).getTime() + exam.durationSec * 1000 + 60_000;
+    if (Date.now() > deadline) return NextResponse.json({ error: 'This attempt has expired' }, { status: 409 });
+    const answers = body.answers as Record<string, AnswerValue>;
+    const timeTaken = body.timeTaken;
+    const attemptNumber: number = stored.attemptNumber || 1;
+    const previousAttempt: ExamAttempt | null = await db.collection('attempts').findOne(
+      { userId: identity.userId, 'result.examId': exam.examId, status: 'submitted', id: { $ne: exam.id } },
+      { sort: { submittedAt: -1 }, projection: { result: 1 } },
+    ).then((value) => value?.result as ExamAttempt | null);
 
     if (!exam || !exam.questions) {
       return NextResponse.json({ error: 'exam payload required' }, { status: 400 });
@@ -32,60 +54,7 @@ export async function POST(request: Request) {
     for (const q of exam.questions) {
       const ans = answers[q.id];
       const taken = timeTaken[q.id] ?? 60;
-      let correct = false;
-      let partial = false;
-      let awarded = 0;
-
-      if (!ans || ans.type === 'unanswered') {
-        awarded = 0;
-      } else if (ans.type === 'mcq' || ans.type === 'reading' || ans.type === 'listening') {
-        if (q.correctOptions && q.correctOptions.length === 1 && ans.optionIndex === q.correctOptions[0]) {
-          correct = true;
-          awarded = q.marks;
-        } else {
-          awarded = -q.negativeMarks;
-        }
-      } else if (ans.type === 'msq') {
-        const correctSet = new Set(q.correctOptions || []);
-        const ansSet = new Set(ans.optionIndices);
-        const allRight = correctSet.size === ansSet.size && [...correctSet].every((x) => ansSet.has(x));
-        if (allRight) {
-          correct = true;
-          awarded = q.marks;
-        } else if (ans.optionIndices.some((x) => correctSet.has(x))) {
-          partial = true;
-          awarded = q.marks / 2;
-        } else {
-          awarded = -q.negativeMarks;
-        }
-      } else if (ans.type === 'numerical') {
-        const target = q.correctNumeric ?? 0;
-        const tol = q.tolerance ?? 0.01;
-        if (Math.abs(ans.value - target) <= tol) {
-          correct = true;
-          awarded = q.marks;
-        } else {
-          awarded = -q.negativeMarks;
-        }
-      } else if (ans.type === 'descriptive' || ans.type === 'writing' || ans.type === 'speaking') {
-        const text = (ans.text || '').toLowerCase();
-        const keys = q.answerKeys || [];
-        if (text.trim().length === 0) {
-          awarded = 0;
-        } else {
-          const hits = keys.filter((k) => text.includes(k.toLowerCase())).length;
-          const ratio = keys.length > 0 ? hits / keys.length : Math.min(text.length / 200, 1);
-          if (ratio >= 0.7) {
-            correct = true;
-            awarded = q.marks;
-          } else if (ratio >= 0.4) {
-            partial = true;
-            awarded = q.marks * 0.5;
-          } else {
-            awarded = q.marks * 0.25;
-          }
-        }
-      }
+      const { correct, partial, awarded } = scoreQuestion(q, ans);
 
       results.push({
         questionId: q.id,
@@ -207,9 +176,14 @@ export async function POST(request: Request) {
       behavior: behaviour,
     };
 
+    await db.collection('attempts').updateOne(
+      { id: exam.id, userId: identity.userId, status: 'in_progress' },
+      { $set: { status: 'submitted', submittedAt: new Date(), result: attempt, answers } },
+    );
     return NextResponse.json({ attempt });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    if (e instanceof z.ZodError) return NextResponse.json({ error: e.issues[0]?.message || 'Invalid submission' }, { status: 400 });
+    return apiError(e);
   }
 }
 

@@ -1,6 +1,8 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
+import { VIEW_PATHS } from '@/lib/navigation';
 import {
   Brain,
   LayoutDashboard,
@@ -98,6 +100,7 @@ function initials(name: string): string {
 }
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
+  const router = useRouter();
   const view = useStore((s) => s.view);
   const setView = useStore((s) => s.setView);
   const attempts = useStore((s) => s.attempts);
@@ -120,6 +123,7 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
                   key={item.id}
                   onClick={() => {
                     setView(item.id);
+                    router.push(VIEW_PATHS[item.id] || '/dashboard');
                     onNavigate?.();
                   }}
                   className={cn(
@@ -206,8 +210,14 @@ function SidebarHeader() {
 }
 
 function SidebarFooter() {
+  const router = useRouter();
   const user = useStore((s) => s.user);
-  const logout = useStore((s) => s.logout);
+  const localLogout = useStore((s) => s.logout);
+  const logout = React.useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
+    localLogout();
+    router.replace('/');
+  }, [localLogout, router]);
   if (!user) return null;
   return (
     <div className="border-t border-stone-200 p-3 flex-shrink-0">

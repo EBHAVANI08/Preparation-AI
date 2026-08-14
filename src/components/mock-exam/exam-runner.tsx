@@ -35,6 +35,11 @@ function fmtTime(sec: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+function remainingSeconds(startedAt: string, durationSec: number): number {
+  const elapsed = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+  return Math.max(0, durationSec - elapsed);
+}
+
 export function ExamRunner({ onExit }: Props) {
   const currentExam = useStore((s) => s.currentExam);
   const endExam = useStore((s) => s.endExam);
@@ -43,27 +48,38 @@ export function ExamRunner({ onExit }: Props) {
   const attempts = useStore((s) => s.attempts);
   const { toast } = useToast();
 
-  const [currentIdx, setCurrentIdx] = React.useState(0);
-  const [answers, setAnswers] = React.useState<Record<string, AnswerValue>>({});
+  const [currentIdx, setCurrentIdx] = React.useState(currentExam?.currentQuestion ?? 0);
+  const [answers, setAnswers] = React.useState<Record<string, AnswerValue>>(currentExam?.draftAnswers ?? {});
   const [marked, setMarked] = React.useState<Set<number>>(new Set());
   const [visited, setVisited] = React.useState<Set<number>>(new Set([0]));
-  const [timeLeft, setTimeLeft] = React.useState(currentExam?.durationSec ?? 0);
-  const [timeTaken, setTimeTaken] = React.useState<Record<string, number>>({});
+  const [timeLeft, setTimeLeft] = React.useState(currentExam ? remainingSeconds(currentExam.startedAt, currentExam.durationSec) : 0);
+  const [timeTaken, setTimeTaken] = React.useState<Record<string, number>>(currentExam?.draftTimeTaken ?? {});
   const [evaluating, setEvaluating] = React.useState(false);
   const [result, setResult] = React.useState<ExamAttempt | null>(null);
 
   // Refs for the per-question timer
   const questionStartRef = React.useRef<number>(Date.now());
 
+  React.useEffect(() => {
+    if (!currentExam || result || evaluating) return;
+    const timer = setTimeout(() => {
+      fetch(`/api/attempts/${currentExam.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers, timeTaken, currentQuestion: currentIdx }),
+      }).catch(() => undefined);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [answers, timeTaken, currentIdx, currentExam?.id, result, evaluating]);
+
   // Sync timer when currentExam changes
   React.useEffect(() => {
     if (currentExam) {
-      setTimeLeft(currentExam.durationSec);
-      setCurrentIdx(0);
-      setAnswers({});
+      setTimeLeft(remainingSeconds(currentExam.startedAt, currentExam.durationSec));
+      setCurrentIdx(currentExam.currentQuestion ?? 0);
+      setAnswers(currentExam.draftAnswers ?? {});
       setMarked(new Set());
       setVisited(new Set([0]));
-      setTimeTaken({});
+      setTimeTaken(currentExam.draftTimeTaken ?? {});
       setResult(null);
       questionStartRef.current = Date.now();
     }

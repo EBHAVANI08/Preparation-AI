@@ -78,6 +78,7 @@ export function MockExamEngine({ onStart }: Props = {}) {
           attemptNumber,
           seenSignatures: seenSignatures.slice(-2000),
           difficulty,
+          durationMinutes: durationOverride === 'default' ? undefined : parseInt(durationOverride, 10),
         }),
       });
       if (!resp.ok) {
@@ -94,9 +95,7 @@ export function MockExamEngine({ onStart }: Props = {}) {
         id: payload.id,
         examId: payload.examId,
         examName: payload.examName,
-        durationSec: durationOverride === 'default'
-          ? payload.durationSec
-          : parseInt(durationOverride, 10) * 60,
+        durationSec: payload.durationSec,
         totalMarks: payload.totalMarks,
         startedAt: payload.startedAt,
         questions: payload.questions,
@@ -185,7 +184,7 @@ export function MockExamEngine({ onStart }: Props = {}) {
               {available.map((p) => {
                 const best = bestScore(p.id);
                 const count = examAttempts(p.id).length;
-                const isPrimary = user.examGoal === p.id;
+                const isPrimary = user?.examGoal === p.id;
                 return (
                   <Card key={p.id} className="card-lift border-stone-200">
                     <CardHeader>

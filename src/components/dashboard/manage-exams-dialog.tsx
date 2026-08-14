@@ -43,18 +43,22 @@ export function ManageExamsDialog({ open, onOpenChange }: {
       return;
     }
     removeExamGoal(id);
+    const nextGoals = goals.filter((goal) => goal !== id);
+    fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ examGoals: nextGoals, examGoal: user!.examGoal === id ? nextGoals[0] : user!.examGoal }) }).catch(() => undefined);
     const p = getPattern(id);
     toast({ title: `Removed ${p?.name ?? id} from your targets` });
   }
 
   function handleAdd(id: string) {
     addExamGoal(id);
+    fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ examGoals: [...goals, id], examGoal: user!.examGoal }) }).catch(() => undefined);
     const p = getPattern(id);
     toast({ title: `Added ${p?.name ?? id} to your targets` });
   }
 
   function handleMakePrimary(id: string) {
     updateUser({ examGoal: id });
+    fetch('/api/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ examGoals: goals, examGoal: id }) }).catch(() => undefined);
     const p = getPattern(id);
     toast({ title: `${p?.name ?? id} is now your primary exam` });
   }

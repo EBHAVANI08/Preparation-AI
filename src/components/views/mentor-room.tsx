@@ -87,6 +87,12 @@ export function MentorRoom() {
   const userName = user?.name?.split(' ')[0] || 'aspirant';
 
   useEffect(() => {
+    fetch('/api/mentor/history').then((response) => response.ok ? response.json() : null)
+      .then((body) => { if (body?.messages?.length) setMentorMessages(body.messages); })
+      .catch(() => undefined);
+  }, [setMentorMessages]);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -121,6 +127,7 @@ export function MentorRoom() {
         }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'AI mentor is unavailable');
       const reply = data?.reply || "I'm here for you. Could you rephrase your question?";
       addMentorMessage({
         id: uid(),
@@ -149,6 +156,7 @@ export function MentorRoom() {
 
   function handleClear() {
     setMentorMessages([]);
+    fetch('/api/mentor/history', { method: 'DELETE' }).catch(() => undefined);
   }
 
   const capabilityAccents = {
