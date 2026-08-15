@@ -5,7 +5,7 @@ const optionalString = () =>
     if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
       return undefined;
     }
-    return val;
+    return typeof val === 'string' ? val.trim() : String(val);
   }, z.string().min(1).optional());
 
 const requiredString = (defaultVal: string) =>
@@ -13,22 +13,25 @@ const requiredString = (defaultVal: string) =>
     if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
       return defaultVal;
     }
-    return val;
+    return typeof val === 'string' ? val.trim() : String(val);
   }, z.string().min(1));
 
 const safeUrl = (defaultVal: string) =>
   z.preprocess((val) => {
-    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+    if (typeof val !== 'string' || val.trim() === '') return defaultVal;
+    try {
+      new URL(val.trim());
+      return val.trim();
+    } catch {
       return defaultVal;
     }
-    return val;
   }, z.string().url());
 
 const safeNumber = (defaultVal: number) =>
   z.preprocess((val) => {
     if (val === undefined || val === null || val === '') return defaultVal;
     const num = Number(val);
-    return Number.isNaN(num) ? defaultVal : num;
+    return Number.isNaN(num) || num < 1000 || num > 120000 ? defaultVal : num;
   }, z.number().int().min(1000).max(120000));
 
 const schema = z.object({
@@ -55,6 +58,7 @@ export function assertProductionEnvironment(): void {
   if (!env.MONGODB_URI) throw new Error('MONGODB_URI is required in production');
   if (!env.AUTH_SECRET) throw new Error('AUTH_SECRET is required in production');
 }
+
 
 
 
